@@ -173,3 +173,8 @@ pdfs/
 
 # Ignore Python virtual environment
 venv/
+
+# Ignore specific CSV files
+merged_results.csv
+mtcnn_results.csv
+
