@@ -114,32 +114,38 @@ def extracting_genes(output_csv):
 import pandas as pd
 
 
-
-def genes_in_text(row):
+def genes_in_text(row, valid_genes):
     if pd.isna(row['genes']):
         return ""
     # Split the genes and strip any extra whitespace
     genes = [gene.strip() for gene in row['genes'].split(',')]
     # Combine title and abstract into a single text
     text = f"{row['abstract']} {row['title_y']}".lower()
-    # Find genes that are present in the text
-    matching_genes = [gene for gene in genes if gene.lower() in text]
+    # Find genes that are present in the text and are valid according to HGNC
+    matching_genes = [gene for gene in genes if gene.lower() in text and gene in valid_genes]
     return ', '.join(matching_genes)
 
-def match_genes_in_text(csv1_path, csv2_path, output_path):
+def match_genes_in_text(csv1_path, csv2_path, hgnc_path, output_path):
     # Read the CSV files
     csv1 = pd.read_csv(csv1_path)
     csv2 = pd.read_csv(csv2_path)
+    hgnc = pd.read_csv(hgnc_path, sep='\t')  # Assuming HGNC file is tab-separated
+
+    # Create a set of valid gene symbols from HGNC
+    valid_genes = set(hgnc['symbol'])
 
     # Print the column names for debugging
     print("CSV 1 columns:", csv1.columns)
     print("CSV 2 columns:", csv2.columns)
+    print("HGNC columns:", hgnc.columns)
 
     # Print the first few rows of each DataFrame for debugging
     print("CSV 1 preview:")
     print(csv1.head())
     print("CSV 2 preview:")
     print(csv2.head())
+    print("HGNC preview:")
+    print(hgnc.head())
 
     # Ensure 'pmid' columns are of the same data type (convert to string)
     csv1['pmid'] = csv1['pmid'].astype(str)
@@ -158,7 +164,7 @@ def match_genes_in_text(csv1_path, csv2_path, output_path):
         raise ValueError("The merged DataFrame does not contain 'title_y' and/or 'abstract' columns.")
 
     # Apply the genes_in_text function to the merged DataFrame
-    merged_df['matching_genes'] = merged_df.apply(genes_in_text, axis=1)
+    merged_df['matching_genes'] = merged_df.apply(lambda row: genes_in_text(row, valid_genes), axis=1)
 
     # Filter the DataFrame to keep only the rows where there are matching genes
     matched_df = merged_df[merged_df['matching_genes'] != ""]
