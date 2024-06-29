@@ -177,6 +177,7 @@ venv/
 # Ignore specific CSV files
 merged_results.csv
 mtcnn_results.csv
+extracted_faces.csv
 
 gene_NBK116/gene_NBK116/
 gene_NBK1116/

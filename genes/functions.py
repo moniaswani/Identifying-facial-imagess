@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 from bs4 import BeautifulSoup
 import pandas as pd
-
 def unzip_file(file_path, destination_path):
     """
     Unzips a specified .tar.gz file to a given destination directory.
@@ -41,6 +40,8 @@ def unzip_file(file_path, destination_path):
         print(fnf_error)
     except Exception as e:
         print(f"An error occurred: {e}")
+
+
 
 def extracting_genes(output_csv):
     # Regular expression pattern to match potential gene symbols with at least 5 characters, excluding exactly three digits
