@@ -71,7 +71,7 @@ instance/
 # Sphinx documentation
 docs/_build/
 
-# PyBuilder
+B# PyBuilder
 .pybuilder/
 target/
 
@@ -178,7 +178,9 @@ venv/
 merged_results.csv
 mtcnn_results.csv
 extracted_faces.csv
-
+extracte_genes.csv
+merged_faces_and_genes.csv
 gene_NBK116/gene_NBK116/
 gene_NBK1116/
 extracted_genes.csv
+
