@@ -40,6 +40,7 @@ def create_and_save_dataframe(data, output_csv):
     print(df)
     return df
 
+
 def merge_dataframes(df1, df2_path, output_csv):
     df2 = pd.read_csv(df2_path, sep='\t')
     
@@ -47,10 +48,15 @@ def merge_dataframes(df1, df2_path, output_csv):
     df2_selected = df2[['index', 'pmid', 'title', 'abstract', 'pub_date', 'pdf']]
     
     # Strip the '.pdf' extension from the 'PDF_File' column in df1
-    df1['PDF_File'] = df1['PDF_File'].str.replace('.pdf', '')
+    df1['PDF_File'] = df1['PDF_File'].str.replace('.pdf', '', regex=False)
 
     # Merge DataFrames on 'PDF_File' and 'index'
     merged_df = df1.merge(df2_selected, left_on='PDF_File', right_on='index')
+    
+    # Drop the 'pdf' column
+    merged_df.drop(columns=['PDF_File'], inplace=True)
+    
+    # Save the merged DataFrame to a new CSV file
     merged_df.to_csv(output_csv, index=False)
     print(merged_df)
     return merged_df

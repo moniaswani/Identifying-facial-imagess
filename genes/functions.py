@@ -45,7 +45,7 @@ def unzip_file(file_path, destination_path):
 
 def extracting_genes(output_csv):
     # Regular expression pattern to match potential gene symbols with at least 5 characters, excluding exactly three digits
-    gene_pattern = re.compile(r'\b(?!\d{3}\b)[A-Z0-9]{3,}\b')
+    gene_pattern = re.compile(r'\b(?!\d{3}\b)[A-Z0-9]{2,}\b')
 
     generev = []
 
@@ -111,5 +111,61 @@ def extracting_genes(output_csv):
     print(f"Gene information saved to {output_csv}")
 
 
+import pandas as pd
 
-    
+
+
+def genes_in_text(row):
+    if pd.isna(row['genes']):
+        return ""
+    # Split the genes and strip any extra whitespace
+    genes = [gene.strip() for gene in row['genes'].split(',')]
+    # Combine title and abstract into a single text
+    text = f"{row['abstract']} {row['title_y']}".lower()
+    # Find genes that are present in the text
+    matching_genes = [gene for gene in genes if gene.lower() in text]
+    return ', '.join(matching_genes)
+
+def match_genes_in_text(csv1_path, csv2_path, output_path):
+    # Read the CSV files
+    csv1 = pd.read_csv(csv1_path)
+    csv2 = pd.read_csv(csv2_path)
+
+    # Print the column names for debugging
+    print("CSV 1 columns:", csv1.columns)
+    print("CSV 2 columns:", csv2.columns)
+
+    # Print the first few rows of each DataFrame for debugging
+    print("CSV 1 preview:")
+    print(csv1.head())
+    print("CSV 2 preview:")
+    print(csv2.head())
+
+    # Ensure 'pmid' columns are of the same data type (convert to string)
+    csv1['pmid'] = csv1['pmid'].astype(str)
+    csv2['pmid'] = csv2['pmid'].astype(str)
+
+    # Merge the DataFrames on the PMID column
+    merged_df = pd.merge(csv1, csv2, on='pmid')
+
+    # Print the merged DataFrame columns and preview
+    print("Merged DataFrame columns:", merged_df.columns)
+    print("Merged DataFrame preview:")
+    print(merged_df.head())
+
+    # Check if 'title_y' and 'abstract' columns exist in the merged DataFrame
+    if 'title_y' not in merged_df.columns or 'abstract' not in merged_df.columns:
+        raise ValueError("The merged DataFrame does not contain 'title_y' and/or 'abstract' columns.")
+
+    # Apply the genes_in_text function to the merged DataFrame
+    merged_df['matching_genes'] = merged_df.apply(genes_in_text, axis=1)
+
+    # Filter the DataFrame to keep only the rows where there are matching genes
+    matched_df = merged_df[merged_df['matching_genes'] != ""]
+
+    # Drop the original 'genes' column
+    matched_df = matched_df.drop(columns=['genes'])
+
+    # Output the results to a new CSV file, without the index
+    matched_df.to_csv(output_path, index=False)
+    print(f'Matched results saved to {output_path}')
