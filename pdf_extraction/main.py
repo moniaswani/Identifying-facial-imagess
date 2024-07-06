@@ -14,6 +14,28 @@ def ensure_directories(*directories):
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
+def save_image_without_conversion(image_path, output_path):
+    # Load the image
+    image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+    if image is None:
+        print(f"Error loading image {image_path}")
+        return False
+
+    # Ensure output path has a valid extension
+    valid_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+    if not any(output_path.lower().endswith(ext) for ext in valid_extensions):
+        print(f"Error: Output path {output_path} does not have a valid image extension.")
+        return False
+
+    # Save the image as is
+    success = cv2.imwrite(output_path, image)
+    if not success:
+        print(f"Error: Could not write image to {output_path}")
+        return False
+    else:
+        print(f"Saved image to {output_path}")
+        return True
+
 def process_pdfs(pdf_directory, image_directory, face_directory, detection_method):
     pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
     results = []
@@ -22,12 +44,30 @@ def process_pdfs(pdf_directory, image_directory, face_directory, detection_metho
         pdf_path = os.path.join(pdf_directory, pdf_file)
         extract_images_from_pdf(pdf_path, image_directory)
 
-        image_files = [f for f in os.listdir(image_directory) if f.startswith(os.path.basename(pdf_path).split('.')[0])]
+        image_files = [f for f in os.listdir(image_directory) if f.startswith(os.path.splitext(pdf_file)[0])]
         total_faces = 0
 
         for image_file in image_files:
             image_path = os.path.join(image_directory, image_file)
-            num_faces = detect_faces(image_path, face_directory, method="yolo")
+            converted_image_path = os.path.join(image_directory, "converted_" + image_file)
+            
+            # Save image without conversion and check if successful
+            if not save_image_without_conversion(image_path, converted_image_path):
+                print(f"Skipping image {image_file} due to save error.")
+                continue
+            
+            # Check if the converted image exists and can be read
+            if not os.path.exists(converted_image_path):
+                print(f"Converted image {converted_image_path} does not exist.")
+                continue
+
+            image = cv2.imread(converted_image_path)
+            if image is None:
+                print(f"Error reading converted image {converted_image_path}")
+                continue
+            
+            # Detect faces in the converted image
+            num_faces = detect_faces(converted_image_path, face_directory, method=detection_method)
             total_faces += num_faces
 
         results.append({"PDF_File": pdf_file, "Number_of_Faces": total_faces})
@@ -39,7 +79,6 @@ def create_and_save_dataframe(data, output_csv):
     df.to_csv(output_csv, index=False)
     print(df)
     return df
-
 
 def merge_dataframes(df1, df2_path, output_csv):
     df2 = pd.read_csv(df2_path, sep='\t')
@@ -66,14 +105,14 @@ def main():
     pdf_directory = 'pdfs/'
     image_directory = 'images/'
     face_directory = 'faces/'
-    output_csv = "mtcnn_results.csv"
+    output_csv = "results_1.csv"
     retrieved_df_path = "retrieved_df2.tsv"
-    final_output_csv = "merged_results.csv"
+    final_output_csv = "results_2.csv"
     detection_method = 'yolo'  # Change to 'mctnn' to switch to MTCNN
 
     ensure_directories(pdf_directory, image_directory, face_directory)
     
-    unzip_pdfs(zip_directory, pdf_directory)
+    # unzip_pdfs(zip_directory, pdf_directory)
     
     data = process_pdfs(pdf_directory, image_directory, face_directory, detection_method)
     

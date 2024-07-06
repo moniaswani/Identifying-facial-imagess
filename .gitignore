@@ -183,4 +183,7 @@ merged_faces_and_genes.csv
 gene_NBK116/gene_NBK116/
 gene_NBK1116/
 extracted_genes.csv
-
+results/
+faces_2/
+images_2/
+images/

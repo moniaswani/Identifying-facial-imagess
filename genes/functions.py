@@ -110,68 +110,132 @@ def extracting_genes(output_csv):
     genes.to_csv(output_csv, index=False)
     print(f"Gene information saved to {output_csv}")
 
-
 import pandas as pd
 
+def match_gene_data(file1, file2, hgnc_file, output_file):
+    """
+    This function reads gene data from two input CSV files and an HGNC file,
+    then matches and cross-references genes between the files. The matched data
+    is saved to an output CSV file.
 
-def genes_in_text(row, valid_genes):
-    if pd.isna(row['genes']):
-        return ""
-    # Split the genes and strip any extra whitespace
-    genes = [gene.strip() for gene in row['genes'].split(',')]
-    # Combine title and abstract into a single text
-    text = f"{row['abstract']} {row['title_y']}".lower()
-    # Find genes that are present in the text and are valid according to HGNC
-    matching_genes = [gene for gene in genes if gene.lower() in text and gene in valid_genes]
-    return ', '.join(matching_genes)
+    Parameters:
+    - file1: str, path to the first input CSV file.
+    - file2: str, path to the second input CSV file.
+    - hgnc_file: str, path to the HGNC text file.
+    - output_file: str, path to the output CSV file where results will be saved.
 
-def match_genes_in_text(csv1_path, csv2_path, hgnc_path, output_path):
-    # Read the CSV files
-    csv1 = pd.read_csv(csv1_path)
-    csv2 = pd.read_csv(csv2_path)
-    hgnc = pd.read_csv(hgnc_path, sep='\t')  # Assuming HGNC file is tab-separated
+    Returns:
+    - output_file: str, path to the output CSV file.
+    """
 
-    # Create a set of valid gene symbols from HGNC
-    valid_genes = set(hgnc['symbol'])
+    # Read the CSV files into dataframes
+    df1 = pd.read_csv(file1)
+    df2 = pd.read_csv(file2)
+    hgnc_df = pd.read_csv(hgnc_file, delimiter="\t", low_memory=False)  # Reading HGNC text file
 
-    # Print the column names for debugging
-    print("CSV 1 columns:", csv1.columns)
-    print("CSV 2 columns:", csv2.columns)
-    print("HGNC columns:", hgnc.columns)
+    # Ensure 'pmid' columns are of the same type
+    df1['pmid'] = df1['pmid'].astype(str)
+    df2['pmid'] = df2['pmid'].astype(str)
 
-    # Print the first few rows of each DataFrame for debugging
-    print("CSV 1 preview:")
-    print(csv1.head())
-    print("CSV 2 preview:")
-    print(csv2.head())
-    print("HGNC preview:")
-    print(hgnc.head())
+    # Check if required columns exist in the dataframes
+    if 'pmid' not in df1.columns or 'genes' not in df1.columns:
+        raise ValueError("Input file 1 must contain 'pmid' and 'genes' columns")
+    if 'pmid' not in df2.columns or 'genes_found' not in df2.columns:
+        raise ValueError("Input file 2 must contain 'pmid' and 'genes_found' columns")
+    if 'symbol' not in hgnc_df.columns:
+        raise ValueError("HGNC file must contain 'symbol' column")
 
-    # Ensure 'pmid' columns are of the same data type (convert to string)
-    csv1['pmid'] = csv1['pmid'].astype(str)
-    csv2['pmid'] = csv2['pmid'].astype(str)
+    # Merge dataframes on 'pmid', keeping all rows from df2
+    merged_df = pd.merge(df2, df1, on='pmid', how='left')
 
-    # Merge the DataFrames on the PMID column
-    merged_df = pd.merge(csv1, csv2, on='pmid')
+    # Initialize a list to store matched rows
+    matched_rows = []
 
-    # Print the merged DataFrame columns and preview
-    print("Merged DataFrame columns:", merged_df.columns)
-    print("Merged DataFrame preview:")
-    print(merged_df.head())
+    # Get the set of symbols from the HGNC file
+    hgnc_symbols = set(hgnc_df['symbol'])
 
-    # Check if 'title_y' and 'abstract' columns exist in the merged DataFrame
-    if 'title_y' not in merged_df.columns or 'abstract' not in merged_df.columns:
-        raise ValueError("The merged DataFrame does not contain 'title_y' and/or 'abstract' columns.")
+    # Iterate through each row of the merged dataframe
+    for index, row in merged_df.iterrows():
+        genes_found = row['genes_found']
 
-    # Apply the genes_in_text function to the merged DataFrame
-    merged_df['matching_genes'] = merged_df.apply(lambda row: genes_in_text(row, valid_genes), axis=1)
+        # Skip rows with NaN values in 'genes_found'
+        if pd.isna(genes_found):
+            continue
 
-    # Filter the DataFrame to keep only the rows where there are matching genes
-    matched_df = merged_df[merged_df['matching_genes'] != ""]
+        # Split the genes by comma to get a list of genes
+        genes_found_list = [gene.strip() for gene in genes_found.split(',')]
 
-    # Drop the original 'genes' column
-    matched_df = matched_df.drop(columns=['genes'])
+        # Filter genes_found to only include those in HGNC symbols
+        cross_referenced_genes = [gene for gene in genes_found_list if gene in hgnc_symbols]
 
-    # Output the results to a new CSV file, without the index
-    matched_df.to_csv(output_path, index=False)
-    print(f'Matched results saved to {output_path}')
+        # Skip rows where no genes are left after filtering
+        if not cross_referenced_genes:
+            continue
+
+        # Check for matching genes if 'genes' column is present in the row
+        if 'genes' in row and not pd.isna(row['genes']):
+            genes1 = [gene.strip() for gene in row['genes'].split(',')]
+            matching_genes = [gene for gene in genes1 if gene in cross_referenced_genes]
+        else:
+            matching_genes = []
+
+        # Create a new row with the relevant data
+        new_row = row.drop(labels=['genes'] if 'genes' in row else []).to_dict()
+        new_row['genes_in_pub_and_genereviews'] = ','.join(matching_genes)
+        new_row['cross_referenced_genes'] = ','.join(cross_referenced_genes)
+        matched_rows.append(new_row)
+
+    # Convert the matched rows to a dataframe
+    matched_df = pd.DataFrame(matched_rows)
+
+    # Drop the 'pdf' column if it exists
+    if 'pdf' in matched_df.columns:
+        matched_df = matched_df.drop(columns=['pdf'])
+
+    # Rename the columns
+    matched_df = matched_df.rename(columns={
+        'title_x': 'pub_title',
+        'title_y': 'genereviews_title',
+        'genes_found': 'genes_in_pub',
+        'matching_genes': 'genes_in_pub_and_genereviews'
+    })
+
+    # Save the matched dataframe to a CSV file
+    matched_df.to_csv(output_file, index=False)
+
+    return output_file
+
+
+import pandas as pd
+import re
+
+def extract_genes_from_csv(input_csv_path, output_csv_path):
+    # Define the regex pattern for gene
+    gene_pattern = re.compile(r'\b(?!\d{3}\b)[A-Z0-9]{3,5}\b')
+
+    # Load the CSV file into a DataFrame
+    df = pd.read_csv(input_csv_path)
+
+    # Function to find genes in text
+    def find_genes(text):
+        if pd.isna(text):
+            return set()
+        matches = gene_pattern.findall(text)
+        # Filter out patterns that are just numbers
+        return {match for match in matches if not match.isdigit()}
+
+    # Apply the function to 'title' and 'abstract' columns and create a new column 'genes_found'
+    title_genes = df['title'].apply(find_genes)
+    abstract_genes = df['abstract'].apply(find_genes)
+    
+    # Combine and remove duplicates
+    df['genes_found'] = title_genes.combine(abstract_genes, lambda x, y: x.union(y)).apply(lambda x: ', '.join(x))
+
+    # Save the modified DataFrame to a new CSV file
+    df.to_csv(output_csv_path, index=False)
+
+    print(f'New CSV file saved as {output_csv_path}')
+
+# Example usage:
+# extract_genes_from_csv('input_file.csv', 'output_file.csv')
+
